@@ -1,0 +1,96 @@
+package org.kneelawk.meddlewrapper;
+
+import java.io.File;
+import java.lang.reflect.Method;
+import java.net.*;
+import java.util.*;
+
+import net.minecraft.launchwrapper.*;
+
+import org.apache.logging.log4j.*;
+
+public class MeddleWrapper implements ITweaker {
+
+	public static final Logger log = LogManager.getLogger("MeddleWrapper");
+
+	private Class<?> meddle;
+	private Object meddleInst;
+	private Method acceptOptionsMet;
+	private Method injectIntoClassLoaderMet;
+	private Method getLaunchTargetMet;
+
+	public MeddleWrapper() {
+		File meddlewrapper = new File("meddlewrapper");
+		if (!meddlewrapper.exists())
+			meddlewrapper.mkdirs();
+
+		File[] meddleLibs = meddlewrapper.listFiles();
+
+		log.info("Found Meddle libs: " + Arrays.toString(meddleLibs));
+
+		for (File lib : meddleLibs) {
+			if (lib.getName().toLowerCase().endsWith(".jar")) {
+				try {
+					Launch.classLoader.addURL(lib.toURI().toURL());
+				} catch (MalformedURLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+
+		try {
+			meddle = Class.forName("net.fybertech.meddle.Meddle", true, Launch.classLoader);
+		} catch (Exception e) {
+			log.error("Unable to load Meddle", e);
+		}
+
+		log.info("Meddle successfully loaded");
+	}
+
+	@Override
+	public void acceptOptions(List<String> args, File gameDir, final File assetsDir, String profile) {
+		try {
+			acceptOptionsMet = meddle.getMethod("acceptOptions", List.class, File.class, File.class, String.class);
+			injectIntoClassLoaderMet = meddle.getMethod("injectIntoClassLoader", LaunchClassLoader.class);
+			getLaunchTargetMet = meddle.getMethod("getLaunchTarget");
+
+			meddleInst = meddle.newInstance();
+		} catch (Exception e) {
+			log.error("Exception initializing meddle", e);
+		}
+
+		try {
+			acceptOptionsMet.invoke(meddleInst, args, gameDir, assetsDir, profile);
+		} catch (Exception e) {
+			log.error("Unable to invoke acceptOptions", e);
+		}
+	}
+
+	@Override
+	public void injectIntoClassLoader(LaunchClassLoader loader) {
+		try {
+			injectIntoClassLoaderMet.invoke(meddleInst, loader);
+		} catch (Exception e) {
+			log.error("Unable to invoke injectIntoClassLoader", e);
+		}
+	}
+
+	@Override
+	public String getLaunchTarget() {
+		try {
+			return (String) getLaunchTargetMet.invoke(meddleInst);
+		} catch (Exception e) {
+			log.error("Unable to invoke getLaunchTarget", e);
+		}
+
+		if (getClass().getClassLoader().getResourceAsStream("net/minecraft/client/main/Main.class") == null)
+			return "net.minecraft.client.main.Main";
+		else
+			return "net.minecraft.server.MinecraftServer";
+	}
+
+	@Override
+	public String[] getLaunchArguments() {
+		return new String[0];
+	}
+}
