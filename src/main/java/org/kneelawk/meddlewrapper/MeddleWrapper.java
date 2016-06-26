@@ -1,3 +1,5 @@
+package org.kneelawk.meddlewrapper;
+
 import net.fybertech.meddle.Meddle;
 
 public class MeddleWrapper extends Meddle {
